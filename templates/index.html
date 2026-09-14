@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Q&A (RAG)</title>
+    <style>
+        body { font-family: sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+        textarea, input[type="file"] { width: 100%; margin: 10px 0; }
+        button { padding: 8px 16px; cursor: pointer; }
+        #answer { margin-top: 20px; padding: 15px; background: #f4f4f4; border-radius: 6px; white-space: pre-wrap; }
+        .source { font-size: 0.85em; color: #555; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <h2>Document Q&A</h2>
+
+    <div>
+        <input type="file" id="fileInput" accept=".pdf,.txt">
+        <button onclick="uploadFile()">Upload & Index</button>
+        <p id="uploadStatus"></p>
+    </div>
+
+    <div>
+        <textarea id="question" rows="3" placeholder="Ask a question about the document..."></textarea>
+        <button onclick="askQuestion()">Ask</button>
+    </div>
+
+    <div id="answer"></div>
+
+    <script>
+        async function uploadFile() {
+            const fileInput = document.getElementById("fileInput");
+            if (!fileInput.files.length) { alert("Choose a file first"); return; }
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            document.getElementById("uploadStatus").innerText = "Indexing...";
+            const res = await fetch("/upload", { method: "POST", body: formData });
+            const data = await res.json();
+            document.getElementById("uploadStatus").innerText = data.message || data.error;
+        }
+
+        async function askQuestion() {
+            const question = document.getElementById("question").value;
+            if (!question.trim()) return;
+
+            document.getElementById("answer").innerText = "Thinking...";
+            const res = await fetch("/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question })
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                document.getElementById("answer").innerText = "Error: " + data.error;
+                return;
+            }
+
+            const sourcesHtml = data.sources.map(s =>
+                `<div class="source">[score ${s.score}] ${s.text}...</div>`
+            ).join("");
+
+            document.getElementById("answer").innerHTML =
+                `<strong>Answer:</strong> ${data.answer}<br><br>${sourcesHtml}`;
+        }
+    </script>
+</body>
+</html>
