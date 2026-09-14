@@ -1,91 +1,146 @@
 # Document Q&A (RAG)
 
-A small Retrieval-Augmented Generation project: upload a PDF or text file,
-ask questions about it, get answers grounded in the actual document content.
+A simple Retrieval-Augmented Generation app that lets you upload a PDF or text file, retrieve the most relevant chunks, and ask questions about the document with AI-grounded answers.
 
-## Pipeline
+## Features
 
-```
+- Upload a PDF or `.txt` file
+- Extract and chunk document text
+- Embed chunks locally with a sentence-transformers model
+- Search using FAISS similarity
+- Generate answers using either Gemini or Ollama
+- Serve a Flask web interface for interactive use
+- Ready for deployment with Gunicorn and Docker
+
+## Architecture
+
+```text
 Document (PDF/txt)
-      ↓  ingest.py
-Extracted text → overlapping chunks
-      ↓  vector_store.py
-Local embeddings (sentence-transformers) → FAISS index
-      ↓  generate.py
-Question → embed → retrieve top-k chunks → LLM (Gemini or local Ollama) → answer
-      ↓  app.py
-Flask API + simple web UI wrapping all of the above
+  ↓
+ingest.py
+  ↓
+chunk_text() → overlapping word chunks
+  ↓
+vector_store.py
+  ↓
+SentenceTransformer embeddings → FAISS index
+  ↓
+generate.py
+  ↓
+question + retrieved chunks → Gemini or Ollama answer
+  ↓
+Flask app served via Gunicorn
 ```
 
-## Setup
+## Local setup
 
-1. Create a virtual environment and install dependencies:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate   # Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-2. Copy `.env.example` to `.env` and fill it in:
-   ```bash
-   cp .env.example .env
-   ```
-   - If using **Gemini** (default): get a free API key at
-     https://aistudio.google.com/apikey and paste it into `.env`.
-   - If using **Ollama** (fully local, zero API key): install Ollama from
-     https://ollama.com, run `ollama pull llama3.2`, and set
-     `LLM_BACKEND=ollama` in `.env`.
-
-## Run it — CLI first
-
-Get the core pipeline working before touching Flask at all:
+1. Create and activate a virtual environment:
 
 ```bash
-python rag.py path/to/your_document.pdf
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
 ```
 
-This ingests the file, builds the index, and drops you into a question loop
-in the terminal. First run downloads the local embedding model (~90MB) —
-that's a one-time cost, cached afterward.
+2. Install dependencies:
 
-## Run it — as a web app
+```bash
+pip install -r requirements.txt
+```
+
+3. Create a `.env` file based on `.env.example`:
+
+```bash
+copy .env.example .env
+```
+
+Then set values such as:
+
+```env
+LLM_BACKEND=gemini
+GEMINI_API_KEY=your_key_here
+PORT=5000
+UPLOAD_FOLDER=uploads
+```
+
+If you want a fully local model instead, use:
+
+```env
+LLM_BACKEND=ollama
+```
+
+Make sure Ollama is installed and the model is downloaded:
+
+```bash
+ollama pull llama3.2
+```
+
+## Run it locally
+
+### Web app
 
 ```bash
 python app.py
 ```
 
-Then open http://localhost:5000, upload a document, and ask questions.
+Open `http://localhost:5000`
 
-## Run it — in Docker
+### CLI check
+
+```bash
+python rag.py path/to/your_document.pdf
+```
+
+This builds the vector index and lets you ask questions from the terminal.
+
+## Production-style deployment
+
+This project is configured to run behind Gunicorn for deployment platforms such as Render.
+
+### Render deployment
+
+1. Push this repo to GitHub.
+2. Create a new Web Service on Render.
+3. Connect the repo and use:
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `gunicorn app:app --bind 0.0.0.0:$PORT`
+4. Add environment variables in the Render dashboard:
+   - `LLM_BACKEND=gemini`
+   - `GEMINI_API_KEY=your_key_here`
+   - `PORT=10000` (Render sets this automatically; keep it as provided by the platform)
+
+A `render.yaml` file is included at the repo root for one-click Render config.
+
+### Docker deployment
 
 ```bash
 docker build -t rag-app .
 docker run -p 5000:5000 --env-file .env rag-app
 ```
 
-## Design choices worth being able to explain
+## Project files
 
-- **Chunking is word-count based (500 words, 50-word overlap)**, not
-  token- or sentence-based. Simple to reason about; a production system
-  would usually chunk on tokens or sentence boundaries instead.
-- **Embeddings run locally** (`sentence-transformers`, `all-MiniLM-L6-v2`)
-  rather than through an API — zero cost, zero rate limits, and it proves
-  you understand what an embedding actually is rather than just calling
-  an endpoint.
-- **FAISS `IndexFlatIP`** with normalized vectors gives cosine similarity
-  search. Flat index means brute-force search — fine at this scale (fast
-  up to tens of thousands of chunks), but not what you'd reach for at
-  millions of vectors (that's where an approximate index like IVF or HNSW
-  would come in — a good "what would you change at scale" answer).
-- **The index lives in memory, one document at a time** — a deliberate
-  scope cut for a demo, not an oversight. Be ready to say what you'd add
-  for multi-document, persistent use: a persisted FAISS index or a
-  managed vector DB (e.g. Postgres + pgvector), plus per-document
-  metadata so retrieval can be scoped to the right file.
+- `app.py` — Flask web app
+- `rag.py` — CLI entry point
+- `ingest.py` — PDF/text extraction and chunking
+- `vector_store.py` — embeddings and FAISS retrieval
+- `generate.py` — Gemini/Ollama answer generation
+- `Dockerfile` — container image for deployment
+- `render.yaml` — Render deployment config
+- `.env.example` — example environment variables
 
-## Future enhancements
+## Notes
 
-- Persist the vector index (Postgres + `pgvector`) instead of in-memory
-- Support multiple documents with metadata filtering
-- Swap word-count chunking for token-aware chunking
-- Deploy to Cloud Run / App Runner (same pattern as the other projects)
+- Chunking is intentionally word-based for simplicity.
+- The FAISS index is in-memory, which is fine for a demo but not for large multi-document production workloads.
+- A production version would usually add persistent storage, metadata filtering, and a managed vector database.
+
+## Future improvements
+
+- Persist the vector index in Postgres with pgvector
+- Support multiple uploaded documents
+- Improve chunking using token-aware boundaries
+- Add user authentication and document history
+- Deploy with a managed AI service and persistent database
