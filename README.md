@@ -120,7 +120,21 @@ gcloud run deploy rag-app \
   --set-env-vars LLM_BACKEND=gemini,GEMINI_API_KEY=your_key_here,PORT=5000,UPLOAD_FOLDER=uploads
 ```
 
+3. Environment variables used by the app:
+   - `LLM_BACKEND=gemini`
+   - `GEMINI_API_KEY=your_key_here`
+   - `PORT=5000`
+   - `UPLOAD_FOLDER=uploads`
+
 The one-instance cap is intentional here because the FAISS index is kept in memory and is not persisted across cold starts or new instances. For this demo/interview setup, a single always-on instance is the most reliable approach.
+
+After deployment, get the live app URL with:
+
+```bash
+gcloud run services describe rag-app --region us-central1 --format "value(status.url)"
+```
+
+Replace the old Render link in the project docs and resume with this Cloud Run URL once it is live.
 
 ### Render deployment
 
