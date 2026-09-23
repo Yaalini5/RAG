@@ -97,7 +97,30 @@ This builds the vector index and lets you ask questions from the terminal.
 
 ## Production-style deployment
 
-This project is configured to run behind Gunicorn for deployment platforms such as Render.
+This project is configured to run behind Gunicorn and to read the runtime port from the environment, which makes it compatible with Google Cloud Run and Render.
+
+### Google Cloud Run deployment
+
+```bash
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com
+
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/rag-app
+
+gcloud run deploy rag-app \
+  --image gcr.io/YOUR_PROJECT_ID/rag-app \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --port 5000 \
+  --memory 2Gi \
+  --min-instances 1 \
+  --max-instances 1 \
+  --set-env-vars LLM_BACKEND=gemini,GEMINI_API_KEY=your_key_here,PORT=5000,UPLOAD_FOLDER=uploads
+```
+
+The one-instance cap is intentional here because the FAISS index is kept in memory and is not persisted across cold starts or new instances. For this demo/interview setup, a single always-on instance is the most reliable approach.
 
 ### Render deployment
 
